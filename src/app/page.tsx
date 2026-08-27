@@ -104,10 +104,40 @@ export default function CommandCenterPage() {
 
       const savedHidden = localStorage.getItem('sentinel_hidden_projects');
       if (savedHidden) setHiddenProjectIds(JSON.parse(savedHidden));
+
+      const savedDisabledServices = localStorage.getItem('sentinel_disabled_services');
+      if (savedDisabledServices) setDisabledServices(JSON.parse(savedDisabledServices));
+
+      const savedDisabledMonorepos = localStorage.getItem('sentinel_disabled_monorepos');
+      if (savedDisabledMonorepos) setDisabledMonorepos(JSON.parse(savedDisabledMonorepos));
     } catch {}
 
     fetchScanData(false, targetActiveId, targetRootsList);
   }, []);
+
+  const [disabledServices, setDisabledServices] = useState<string[]>([]);
+  const [disabledMonorepos, setDisabledMonorepos] = useState<string[]>([]);
+
+  const toggleDisableSubmodule = (projectId: string, submoduleName: string) => {
+    const key = `${projectId}::${submoduleName}`;
+    setDisabledServices((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      try {
+        localStorage.setItem('sentinel_disabled_services', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const toggleDisableProjectMonorepo = (projectId: string) => {
+    setDisabledMonorepos((prev) => {
+      const next = prev.includes(projectId) ? prev.filter((k) => k !== projectId) : [...prev, projectId];
+      try {
+        localStorage.setItem('sentinel_disabled_monorepos', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const currentRoot = useMemo(() => {
     if (activeRootId === 'ALL_REGISTERED') return null;
@@ -497,6 +527,8 @@ export default function CommandCenterPage() {
               onOpenServices={(proj) => setSelectedProjectForServices(proj)}
               onOpenEditUrl={(proj) => setSelectedProjectForUrl(proj)}
               onToggleHide={toggleHideProject}
+              disabledServices={disabledServices}
+              isMonorepoDisabled={disabledMonorepos.includes(p.id)}
               liveStatus={liveStatuses[p.id]}
             />
           ))}
@@ -526,6 +558,9 @@ export default function CommandCenterPage() {
         project={selectedProjectForServices}
         onClose={() => setSelectedProjectForServices(null)}
         allProjects={data?.projects || []}
+        disabledServices={disabledServices}
+        onToggleDisableSubmodule={toggleDisableSubmodule}
+        onDisableProjectMonorepo={toggleDisableProjectMonorepo}
         onOpenSubproject={(sub) => {
           setSelectedProjectForServices(null);
           setSelectedProjectForExplainer(sub);

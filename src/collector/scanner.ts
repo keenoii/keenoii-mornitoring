@@ -15,7 +15,7 @@ import { detectProjectType } from './detector';
 import { extractGitInfo } from './git';
 import { scanTodosAndFixmes } from './todo';
 import { parseProjectMonitorYaml } from './yaml-parser';
-import { FORBIDDEN_DIRECTORIES, isForbiddenDirectory } from './privacy';
+import { FORBIDDEN_DIRECTORIES, isForbiddenDirectory, STANDARD_SOURCE_DIRECTORIES } from './privacy';
 
 export interface ScanOptions {
   roots: string[];
@@ -196,7 +196,12 @@ export async function scanProjectDirectory(projectPath: string, rootDir: string)
   const directChildDirs = tryReadDir(projectPath).filter((entry) => {
     try {
       const full = path.join(projectPath, entry);
-      return fs.statSync(full).isDirectory() && !isForbiddenDirectory(entry);
+      const lower = entry.toLowerCase();
+      // Skip forbidden dirs and standard source directories (src, app, public, components, lib, etc.)
+      if (isForbiddenDirectory(entry) || STANDARD_SOURCE_DIRECTORIES.includes(lower)) {
+        return false;
+      }
+      return fs.statSync(full).isDirectory();
     } catch {
       return false;
     }
@@ -204,14 +209,40 @@ export async function scanProjectDirectory(projectPath: string, rootDir: string)
 
   for (const sub of directChildDirs) {
     const subDirPath = path.join(projectPath, sub);
-    if (sub === 'apps' || sub === 'packages' || sub === 'services') {
+    const subFiles = new Set(tryReadDir(subDirPath));
+
+    // A real microservice/submodule MUST have its own project manifest or Dockerfile/compose file
+    const hasOwnManifest =
+      subFiles.has('package.json') ||
+      subFiles.has('composer.json') ||
+      subFiles.has('go.mod') ||
+      subFiles.has('pom.xml') ||
+      subFiles.has('pyproject.toml') ||
+      subFiles.has('requirements.txt') ||
+      subFiles.has('Dockerfile') ||
+      subFiles.has('docker-compose.yml') ||
+      subFiles.has('docker-compose.yaml') ||
+      subFiles.has('.project-monitor.yaml') ||
+      subFiles.has('.project-monitor.yml');
+
+    if (sub === 'apps' || sub === 'packages') {
       const nestedEntries = tryReadDir(subDirPath);
       for (const nested of nestedEntries) {
         const nestedPath = path.join(subDirPath, nested);
         try {
           if (fs.statSync(nestedPath).isDirectory() && !isForbiddenDirectory(nested)) {
-            const subType = detectProjectType(nestedPath);
-            if (subType.primaryType !== 'Unknown' || subType.indicatorFiles.length > 0) {
+            const nestedFiles = new Set(tryReadDir(nestedPath));
+            const hasNestedManifest =
+              nestedFiles.has('package.json') ||
+              nestedFiles.has('composer.json') ||
+              nestedFiles.has('go.mod') ||
+              nestedFiles.has('pom.xml') ||
+              nestedFiles.has('Dockerfile') ||
+              nestedFiles.has('pyproject.toml') ||
+              nestedFiles.has('requirements.txt');
+
+            if (hasNestedManifest) {
+              const subType = detectProjectType(nestedPath);
               submodules.push({
                 name: `${sub}/${nested}`,
                 relativePath: `${sub}/${nested}`,
@@ -222,7 +253,7 @@ export async function scanProjectDirectory(projectPath: string, rootDir: string)
           }
         } catch {}
       }
-    } else {
+    } else if (hasOwnManifest) {
       const subType = detectProjectType(subDirPath);
       if (subType.primaryType !== 'Unknown' || subType.indicatorFiles.length > 0) {
         submodules.push({

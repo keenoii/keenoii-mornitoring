@@ -14,6 +14,8 @@ interface ProjectCardProps {
   onOpenServices?: (project: ProjectWithHealth) => void;
   onOpenEditUrl?: (project: ProjectWithHealth) => void;
   onToggleHide?: (projectId: string, e: React.MouseEvent) => void;
+  disabledServices?: string[];
+  isMonorepoDisabled?: boolean;
   liveStatus?: { isOnline: boolean; statusCode?: number; responseTimeMs: number; error?: string };
 }
 
@@ -26,6 +28,8 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   onOpenServices,
   onOpenEditUrl,
   onToggleHide,
+  disabledServices = [],
+  isMonorepoDisabled = false,
   liveStatus,
 }) => {
   const isStale = p.status === 'STALE' || p.health.isSmartStale;
@@ -112,13 +116,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             {p.detectedType.primaryType}
           </span>
 
-          {p.submodules && p.submodules.length > 0 && (
+          {!isMonorepoDisabled && p.submodules && p.submodules.filter((s) => !disabledServices.includes(`${p.id}::${s.name}`)).length > 0 && (
             <button
               onClick={() => onOpenServices && onOpenServices(p)}
               className="px-2.5 py-0.5 rounded-md bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-[11px] text-purple-300 font-bold transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm"
               title="คลิกเพื่อดูรายการ Services ทั้งหมดในโปรเจกต์นี้"
             >
-              📦 {p.submodules.length} Services ↗
+              📦 {p.submodules.filter((s) => !disabledServices.includes(`${p.id}::${s.name}`)).length} Services ↗
             </button>
           )}
 
