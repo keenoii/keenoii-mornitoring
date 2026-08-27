@@ -835,7 +835,7 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
       {/* 6. CHANGE BACKGROUND MODAL */}
       <OfficeChangeBgModal
         isOpen={showBgModal}
-        currentBg={layout.imageSrc}
+        currentBg={bgImageSrc || layout.imageSrc}
         onClose={() => setShowBgModal(false)}
         onApply={(newSrc) => {
           setLayout((prev) => ({ ...prev, imageSrc: newSrc }));

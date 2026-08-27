@@ -15,3 +15,7 @@ build
 # local db
 data/*.db
 data/*.db-*
+
+# uploads
+public/uploads/*
+!public/uploads/.gitkeep
