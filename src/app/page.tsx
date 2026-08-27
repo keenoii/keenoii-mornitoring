@@ -418,14 +418,14 @@ export default function CommandCenterPage() {
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
       {/* 1. GLOBAL HEADER */}
       <GlobalHeader
-        activeWorkspacePath={currentRoot?.path || 'All Workspaces'}
-        totalProjectsCount={data?.totalProjects ?? 0}
+        activeWorkspacePath={currentRoot?.name || currentRoot?.path || 'ทุกโฟลเดอร์ที่บันทึกไว้'}
+        totalProjectsCount={kpiStats.total}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onRefresh={() => fetchScanData(true)}
         isLoading={loading}
         activeView="portfolio"
-        attentionCount={data?.needAttentionCount ?? 0}
+        attentionCount={kpiStats.attention}
         onToggleAttention={() => setActiveTab(activeTab === 'attention' ? 'portfolio' : 'attention')}
         isAttentionActive={activeTab === 'attention'}
       />
@@ -469,7 +469,7 @@ export default function CommandCenterPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         portfolioCount={filteredProjects.length}
-        attentionCount={data?.needAttentionCount ?? 0}
+        attentionCount={kpiStats.attention}
         activeQuickFilter={activeQuickFilter}
         onToggleQuickFilter={(filter) =>
           setActiveQuickFilter(activeQuickFilter === filter ? null : filter)
