@@ -5,7 +5,8 @@ import { ProjectWithHealth } from '@/lib/project-repository';
 import { VIRTUAL_STUDIOS, StudioDefinition, ClassificationResult } from '@/lib/studio-classifier';
 import { DEFAULT_OFFICE_LAYOUT, OfficeLayoutTheme, PanelCoordinate } from '@/lib/office-layout-config';
 import { APP_SETTINGS } from '@/config/app-settings';
-import { Server, Star, Globe } from 'lucide-react';
+import { Server, Star, Globe, Users, UserPlus } from 'lucide-react';
+import { OfficeStaffMember } from '@/lib/office-buildings-config';
 import { OfficeTopToolbar } from './OfficeTopToolbar';
 import { OfficeTourBanner } from './OfficeTourBanner';
 import { OfficeLayoutStudioToolbar } from './OfficeLayoutStudioToolbar';
@@ -68,6 +69,11 @@ interface IsometricOfficeViewProps {
   onSelectStudio: (studio: StudioDefinition) => void;
   onSelectProject: (project: ProjectWithHealth) => void;
   liveStatuses?: Record<string, LiveHealthStatus>;
+  staffList?: OfficeStaffMember[];
+  displayMode?: 'projects' | 'staff';
+  bgImageSrc?: string;
+  onOpenManageStaff?: () => void;
+  onOpenChangeBg?: () => void;
 }
 
 export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
@@ -77,6 +83,11 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
   onSelectStudio,
   onSelectProject,
   liveStatuses = {},
+  staffList = [],
+  displayMode = 'projects',
+  bgImageSrc,
+  onOpenManageStaff,
+  onOpenChangeBg,
 }) => {
   // 1. Active Layout State
   const [layout, setLayout] = useState<OfficeLayoutTheme>(DEFAULT_OFFICE_LAYOUT);
@@ -395,6 +406,61 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
     const isMatchSearch = project ? isMatch(project) : true;
     const isStarred = project ? starredProjectIds.includes(project.id) : false;
     const isCritical = project ? project.health.total < APP_SETTINGS.healthThresholds.risk : false;
+    const assignedStaff = staffList.find((s) => s.deskId === coord.id);
+
+    if (displayMode === 'staff') {
+      const isStaffIdle = !assignedStaff;
+      let staffBorder = 'border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.3)]';
+      if (isStaffIdle) staffBorder = 'border-slate-800/80 bg-slate-950/60 opacity-60 hover:opacity-100';
+      if (isSelectedInEditor) staffBorder = 'border-amber-400 ring-2 ring-amber-400';
+
+      return (
+        <div
+          key={coord.id}
+          style={{
+            top: coord.top,
+            left: coord.left,
+            width: coord.width || (coord.roomType === 'dormant' ? '124px' : '108px'),
+            height: coord.height || 'auto',
+            transform: 'translate(-50%, -50%)',
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onOpenManageStaff) onOpenManageStaff();
+          }}
+          className={`absolute z-10 cursor-pointer transition-all duration-150 group/panel`}
+        >
+          <div
+            className={`h-full p-2 rounded-xl bg-slate-950/90 backdrop-blur-md border ${staffBorder} group-hover/panel:border-emerald-400 group-hover/panel:shadow-[0_0_18px_rgba(16,185,129,0.5)] transition-all flex flex-col items-center justify-between text-center relative overflow-hidden`}
+          >
+            {assignedStaff ? (
+              <div className="w-full space-y-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+                  <span className="text-[8px] font-mono font-bold px-1 rounded bg-slate-800 text-emerald-300">
+                    {assignedStaff.role}
+                  </span>
+                  <span className="text-sm">{assignedStaff.avatarEmoji}</span>
+                </div>
+                <div className="font-bold text-white text-[10px] truncate">{assignedStaff.name}</div>
+                <div className="text-[8px] text-slate-400 font-mono truncate">
+                  {assignedStaff.assignedProjectName ? `💻 ${assignedStaff.assignedProjectName}` : `📍 ${coord.id}`}
+                </div>
+              </div>
+            ) : (
+              <div className="w-full py-1 text-center space-y-0.5">
+                <div className="text-base">🪑</div>
+                <div className="text-[9px] font-bold text-slate-400 group-hover/panel:text-emerald-300">
+                  + บรรจุพนักงาน
+                </div>
+                <div className="text-[7px] text-slate-500 font-mono">{coord.id}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     const isAttention =
       project && !isCritical
         ? project.health.total < APP_SETTINGS.healthThresholds.healthy
@@ -515,6 +581,10 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
             </span>
             {isStarred && !isIdle ? (
               <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400 flex-shrink-0" />
+            ) : assignedStaff ? (
+              <span className="text-[10px]" title={`พนักงานประจำโต๊ะ: ${assignedStaff.name}`}>
+                {assignedStaff.avatarEmoji}
+              </span>
             ) : (
               <span className="w-1" />
             )}
@@ -605,7 +675,7 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
         copiedSuccess={copiedSuccess}
         saveSuccess={saveSuccess}
         onAddPanel={handleAddPanel}
-        onOpenBgModal={() => setShowBgModal(true)}
+        onOpenBgModal={() => (onOpenChangeBg ? onOpenChangeBg() : setShowBgModal(true))}
         onCopyJson={handleCopyJson}
         onResetLayout={handleResetLayout}
         onSaveLayout={handleSaveLayout}
@@ -637,7 +707,7 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
         >
           {/* High Resolution Cyberpunk Diorama Image */}
           <img
-            src={layout.imageSrc}
+            src={bgImageSrc || layout.imageSrc}
             alt="Virtual Project Office"
             className="w-full h-full object-cover rounded-2xl shadow-2xl pointer-events-none"
           />

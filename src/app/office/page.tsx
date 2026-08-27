@@ -35,6 +35,16 @@ import { ProjectAiAdvisorModal } from '@/components/dashboard/ProjectAiAdvisorMo
 import { ProjectServicesModal } from '@/components/dashboard/ProjectServicesModal';
 import { EditProjectUrlModal } from '@/components/dashboard/EditProjectUrlModal';
 import { LiveHealthStatus } from '@/services/live-health-service';
+import {
+  OfficeBuilding,
+  OfficeStaffMember,
+  DEFAULT_BUILDINGS,
+  DEFAULT_STAFF_MEMBERS,
+} from '@/lib/office-buildings-config';
+import { OfficeBuildingsBar } from '@/components/virtual-office/OfficeBuildingsBar';
+import { ManageBuildingsModal } from '@/components/virtual-office/ManageBuildingsModal';
+import { ManageStaffModal } from '@/components/virtual-office/ManageStaffModal';
+import { OfficeChangeBgModal } from '@/components/virtual-office/OfficeChangeBgModal';
 
 const DEFAULT_ROOTS: MonitoredRoot[] = [
   { id: 'srru', name: 'SRRU Projects', path: 'D:\\MyProject\\srru', icon: '🏛️' },
@@ -72,6 +82,17 @@ export default function VirtualProjectOfficePage() {
   const [customStudioOverrides, setCustomStudioOverrides] = useState<Record<string, string>>({});
   const [overrideSavedSuccess, setOverrideSavedSuccess] = useState<boolean>(false);
 
+  // Buildings & Staff States
+  const [buildings, setBuildings] = useState<OfficeBuilding[]>(DEFAULT_BUILDINGS);
+  const [activeBuildingId, setActiveBuildingId] = useState<string>('bldg-main-hq');
+  const [staffList, setStaffList] = useState<OfficeStaffMember[]>(DEFAULT_STAFF_MEMBERS);
+  const [displayMode, setDisplayMode] = useState<'projects' | 'staff'>('projects');
+
+  // Modals for Building & Staff
+  const [showManageBuildingsModal, setShowManageBuildingsModal] = useState<boolean>(false);
+  const [showChangeBgModal, setShowChangeBgModal] = useState<boolean>(false);
+  const [showManageStaffModal, setShowManageStaffModal] = useState<boolean>(false);
+
   // AI Advisor States
   const [aiAdvice, setAiAdvice] = useState<any | null>(null);
   const [generatingAdvice, setGeneratingAdvice] = useState<boolean>(false);
@@ -79,7 +100,7 @@ export default function VirtualProjectOfficePage() {
   const [customApiKey, setCustomApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
 
-  // Load Starred, Roots, Hidden & Custom Overrides from localStorage
+  // Load Starred, Roots, Hidden, Buildings & Staff from localStorage
   useEffect(() => {
     let targetActiveId = 'srru';
     let targetRootsList = DEFAULT_ROOTS;
@@ -117,10 +138,102 @@ export default function VirtualProjectOfficePage() {
 
       const savedKey = localStorage.getItem('sentinel_ai_key');
       if (savedKey) setCustomApiKey(savedKey);
+
+      const savedBuildings = localStorage.getItem('sentinel_office_buildings');
+      if (savedBuildings) setBuildings(JSON.parse(savedBuildings));
+
+      const savedActiveBldg = localStorage.getItem('sentinel_active_building_id');
+      if (savedActiveBldg) setActiveBuildingId(savedActiveBldg);
+
+      const savedStaff = localStorage.getItem('sentinel_office_staff');
+      if (savedStaff) setStaffList(JSON.parse(savedStaff));
+
+      const savedDisplayMode = localStorage.getItem('sentinel_office_display_mode');
+      if (savedDisplayMode === 'staff' || savedDisplayMode === 'projects') setDisplayMode(savedDisplayMode);
     } catch {}
 
     fetchOfficeProjects(false, targetActiveId, targetRootsList);
   }, []);
+
+  const activeBuilding = useMemo(() => {
+    return buildings.find((b) => b.id === activeBuildingId) || buildings[0] || DEFAULT_BUILDINGS[0];
+  }, [buildings, activeBuildingId]);
+
+  const handleSelectBuilding = (id: string) => {
+    setActiveBuildingId(id);
+    try {
+      localStorage.setItem('sentinel_active_building_id', id);
+    } catch {}
+  };
+
+  const handleAddBuilding = (newBuilding: OfficeBuilding) => {
+    const updated = [...buildings, newBuilding];
+    setBuildings(updated);
+    try {
+      localStorage.setItem('sentinel_office_buildings', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleDeleteBuilding = (id: string) => {
+    const updated = buildings.filter((b) => b.id !== id);
+    setBuildings(updated);
+    if (activeBuildingId === id && updated.length > 0) {
+      setActiveBuildingId(updated[0].id);
+    }
+    try {
+      localStorage.setItem('sentinel_office_buildings', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleUpdateBuilding = (updatedBldg: OfficeBuilding) => {
+    const updated = buildings.map((b) => (b.id === updatedBldg.id ? updatedBldg : b));
+    setBuildings(updated);
+    try {
+      localStorage.setItem('sentinel_office_buildings', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleApplyBackground = (newSrc: string) => {
+    if (!activeBuilding) return;
+    const updated = buildings.map((b) =>
+      b.id === activeBuilding.id ? { ...b, bgImageSrc: newSrc } : b
+    );
+    setBuildings(updated);
+    try {
+      localStorage.setItem('sentinel_office_buildings', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleAddStaff = (newStaff: OfficeStaffMember) => {
+    const updated = [...staffList, newStaff];
+    setStaffList(updated);
+    try {
+      localStorage.setItem('sentinel_office_staff', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleUpdateStaff = (updatedStaff: OfficeStaffMember) => {
+    const updated = staffList.map((s) => (s.id === updatedStaff.id ? updatedStaff : s));
+    setStaffList(updated);
+    try {
+      localStorage.setItem('sentinel_office_staff', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleDeleteStaff = (staffId: string) => {
+    const updated = staffList.filter((s) => s.id !== staffId);
+    setStaffList(updated);
+    try {
+      localStorage.setItem('sentinel_office_staff', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleToggleDisplayMode = (mode: 'projects' | 'staff') => {
+    setDisplayMode(mode);
+    try {
+      localStorage.setItem('sentinel_office_display_mode', mode);
+    } catch {}
+  };
 
   const toggleHideProject = (projectId: string) => {
     setHiddenProjectIds((prev) => {
@@ -438,6 +551,19 @@ export default function VirtualProjectOfficePage() {
         onOpenManageModal={() => setShowManageModal(true)}
       />
 
+      {/* 2.5 OFFICE BUILDINGS & STAFF BAR */}
+      <OfficeBuildingsBar
+        buildings={buildings}
+        activeBuildingId={activeBuildingId}
+        onSelectBuilding={handleSelectBuilding}
+        onOpenManageBuildings={() => setShowManageBuildingsModal(true)}
+        onOpenChangeBg={() => setShowChangeBgModal(true)}
+        onOpenManageStaff={() => setShowManageStaffModal(true)}
+        displayMode={displayMode}
+        onToggleDisplayMode={handleToggleDisplayMode}
+        totalStaffCount={staffList.filter((s) => s.buildingId === activeBuildingId).length}
+      />
+
       {/* 3. DUAL VIEW MODE SWITCHER & CONTROLS */}
       <div className="flex items-center justify-between gap-3 bg-slate-900/80 p-3 rounded-2xl border border-slate-800 flex-wrap">
         <div className="flex items-center gap-2">
@@ -497,6 +623,11 @@ export default function VirtualProjectOfficePage() {
             onSelectStudio={(studio) => setSelectedStudio(studio)}
             onSelectProject={(project) => setQuickProject(project)}
             liveStatuses={liveStatuses}
+            staffList={staffList.filter((s) => s.buildingId === activeBuildingId)}
+            displayMode={displayMode}
+            bgImageSrc={activeBuilding?.bgImageSrc}
+            onOpenManageStaff={() => setShowManageStaffModal(true)}
+            onOpenChangeBg={() => setShowChangeBgModal(true)}
           />
         </section>
       ) : (
@@ -731,6 +862,38 @@ export default function VirtualProjectOfficePage() {
             localStorage.setItem('sentinel_monitored_roots', JSON.stringify(updated));
           } catch {}
         }}
+      />
+
+      {/* 11. MANAGE BUILDINGS MODAL */}
+      <ManageBuildingsModal
+        isOpen={showManageBuildingsModal}
+        onClose={() => setShowManageBuildingsModal(false)}
+        buildings={buildings}
+        activeBuildingId={activeBuildingId}
+        onSelectBuilding={handleSelectBuilding}
+        onAddBuilding={handleAddBuilding}
+        onDeleteBuilding={handleDeleteBuilding}
+        onUpdateBuilding={handleUpdateBuilding}
+      />
+
+      {/* 12. CHANGE BACKGROUND MODAL */}
+      <OfficeChangeBgModal
+        isOpen={showChangeBgModal}
+        onClose={() => setShowChangeBgModal(false)}
+        currentBg={activeBuilding?.bgImageSrc || '/room/room-office.png'}
+        onApply={handleApplyBackground}
+      />
+
+      {/* 13. MANAGE STAFF & WORKERS MODAL */}
+      <ManageStaffModal
+        isOpen={showManageStaffModal}
+        onClose={() => setShowManageStaffModal(false)}
+        staffList={staffList}
+        activeBuildingId={activeBuildingId}
+        allProjects={projects}
+        onAddStaff={handleAddStaff}
+        onUpdateStaff={handleUpdateStaff}
+        onDeleteStaff={handleDeleteStaff}
       />
     </div>
   );
