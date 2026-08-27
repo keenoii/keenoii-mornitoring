@@ -24,6 +24,9 @@ import {
   Star,
   Activity,
   Zap,
+  CheckSquare,
+  Square,
+  Bookmark,
 } from 'lucide-react';
 import { ProjectWithHealth } from '@/lib/project-repository';
 import { ProjectGoal, ProjectMemoryEntry } from '@/lib/project-memory';
@@ -53,6 +56,12 @@ export default function ProjectMemoryCockpitPage({
   const [blockerInput, setBlockerInput] = useState<string>('');
   const [followUpDateInput, setFollowUpDateInput] = useState<string>('');
   const [savingGoal, setSavingGoal] = useState<boolean>(false);
+
+  // AI Advice & Memory Selection State
+  const [selectedDoNextIndices, setSelectedDoNextIndices] = useState<number[]>([]);
+  const [savedMemoryIds, setSavedMemoryIds] = useState<Record<string, boolean>>({});
+  const [savingMemory, setSavingMemory] = useState<boolean>(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [goalSavedSuccess, setGoalSavedSuccess] = useState<boolean>(false);
 
   // Memory Timeline State
@@ -224,6 +233,88 @@ export default function ProjectMemoryCockpitPage({
     } finally {
       setGeneratingAdvice(false);
     }
+  };
+
+  const toggleDoNextSelect = (idx: number) => {
+    setSelectedDoNextIndices((prev) =>
+      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
+    );
+  };
+
+  const handleSaveItemToMemory = async (
+    title: string,
+    content: string,
+    type: 'note' | 'decision' | 'blocker' | 'milestone' = 'note',
+    itemKey?: string
+  ) => {
+    if (!project) return;
+    setSavingMemory(true);
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(project.id)}/memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_memory',
+          title: title.slice(0, 100),
+          type,
+          content,
+        }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.memory) {
+          setMemories((prev) => [json.memory, ...prev]);
+        }
+        if (itemKey) {
+          setSavedMemoryIds((prev) => ({ ...prev, [itemKey]: true }));
+        }
+        setSaveSuccessMsg(`บันทึก "${title.slice(0, 30)}..." ลงความทรงจำเรียบร้อยแล้ว 🧠✨`);
+        setTimeout(() => setSaveSuccessMsg(null), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to save memory:', err);
+    } finally {
+      setSavingMemory(false);
+    }
+  };
+
+  const handleSaveSelectedDoNext = async () => {
+    if (!project || !aiAdvice || !aiAdvice.doNext || !Array.isArray(aiAdvice.doNext)) return;
+    setSavingMemory(true);
+    let count = 0;
+
+    for (const idx of selectedDoNextIndices) {
+      const item = aiAdvice.doNext[idx];
+      if (!item) continue;
+      const title = typeof item === 'object' ? item.action || item.title : String(item);
+      const content = typeof item === 'object' ? item.reason || 'AI Advisor Action Step' : 'AI Advice';
+
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(project.id)}/memory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'add_memory',
+            title,
+            type: 'note',
+            content,
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.memory) {
+            setMemories((prev) => [json.memory, ...prev]);
+          }
+          setSavedMemoryIds((prev) => ({ ...prev, [`cockpit-donext-${idx}`]: true }));
+          count++;
+        }
+      } catch {}
+    }
+
+    setSavingMemory(false);
+    setSaveSuccessMsg(`บันทึก ${count} คำแนะนำลงในความทรงจำของโปรเจกต์เรียบร้อยแล้ว 🧠✨`);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
   };
 
   if (loading) {
@@ -508,35 +599,189 @@ export default function ProjectMemoryCockpitPage({
           </div>
         </div>
 
+        {/* Global Save Success Notification */}
+        {saveSuccessMsg && (
+          <div className="p-3 bg-emerald-950/60 border border-emerald-500/50 rounded-2xl flex items-center gap-2 text-xs text-emerald-300 animate-fadeIn">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span className="font-semibold">{saveSuccessMsg}</span>
+          </div>
+        )}
+
         {aiAdvice ? (
-          <div className="space-y-3 text-xs">
-            <div className="p-3.5 bg-emerald-950/20 border border-emerald-800/40 rounded-2xl flex items-center justify-between gap-3">
-              <div>
-                <div className="text-emerald-300 font-bold text-xs mb-0.5">
-                  🩺 Diagnosis: {aiAdvice.diagnosis || aiAdvice.overallStatus}
+          <div className="space-y-3 text-xs animate-fadeIn">
+            {/* 1. Diagnosis */}
+            <div className="p-3.5 bg-emerald-950/20 border border-emerald-800/40 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-emerald-300 font-bold text-xs flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>🩺 Diagnosis: {aiAdvice.diagnosis || aiAdvice.overallStatus}</span>
                 </div>
-                <p className="text-[11px] text-slate-300">{aiAdvice.reasoning}</p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400">Est. Health: </span>
+                    <span className="text-xs font-black text-emerald-400">{aiAdvice.estimatedHealth}</span>
+                  </div>
+                  <button
+                    onClick={() =>
+                      handleSaveItemToMemory(
+                        `Diagnosis: ${project.name}`,
+                        aiAdvice.diagnosis || aiAdvice.overallStatus || 'AI Diagnosis',
+                        'note',
+                        'cockpit-diag-1'
+                      )
+                    }
+                    disabled={savedMemoryIds['cockpit-diag-1']}
+                    className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      savedMemoryIds['cockpit-diag-1']
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    {savedMemoryIds['cockpit-diag-1'] ? <Check className="w-3 h-3 text-emerald-400" /> : <Bookmark className="w-3 h-3" />}
+                    <span>{savedMemoryIds['cockpit-diag-1'] ? 'บันทึกแล้ว ✓' : 'บันทึกลงความทรงจำ'}</span>
+                  </button>
+                </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <span className="text-[10px] text-slate-400">Est. Health:</span>
-                <div className="text-sm font-black text-emerald-400">{aiAdvice.estimatedHealth}</div>
-              </div>
+              {aiAdvice.reasoning && <p className="text-[11px] text-slate-300 leading-relaxed">{aiAdvice.reasoning}</p>}
             </div>
 
-            {aiAdvice.doNotPrioritizeYet && aiAdvice.doNotPrioritizeYet.length > 0 && (
-              <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/80 space-y-1">
-                <div className="text-slate-400 font-bold text-[11px]">🛡️ DO NOT PRIORITIZE YET (ยังไม่ต้องทำตอนนี้):</div>
-                <ul className="list-disc list-inside text-slate-400 text-[11px]">
-                  {aiAdvice.doNotPrioritizeYet.map((item: string, idx: number) => (
-                    <li key={idx}>{item}</li>
-                  ))}
-                </ul>
+            {/* 2. DO NEXT Recommendations */}
+            {aiAdvice.doNext && (
+              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-emerald-400 flex items-center gap-1.5 text-xs">
+                    <span>✅ สิ่งที่ควรทำต่อไป (DO NEXT):</span>
+                  </div>
+                  {Array.isArray(aiAdvice.doNext) && selectedDoNextIndices.length > 0 && (
+                    <button
+                      onClick={handleSaveSelectedDoNext}
+                      disabled={savingMemory}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg font-bold flex items-center gap-1 shadow-sm cursor-pointer transition-all text-xs"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>บันทึกที่เลือก ({selectedDoNextIndices.length}) ลงความทรงจำ</span>
+                    </button>
+                  )}
+                </div>
+
+                {Array.isArray(aiAdvice.doNext) ? (
+                  <div className="space-y-2">
+                    {aiAdvice.doNext.map((item: any, idx: number) => {
+                      const isSelected = selectedDoNextIndices.includes(idx);
+                      const isSaved = savedMemoryIds[`cockpit-donext-${idx}`];
+                      const title = typeof item === 'object' ? item.action || item.title : String(item);
+                      const reason = typeof item === 'object' ? item.reason : undefined;
+                      const gain = typeof item === 'object' ? item.estimatedGain : undefined;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-2.5 rounded-xl border transition-all ${
+                            isSelected
+                              ? 'bg-emerald-950/40 border-emerald-500/50'
+                              : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div
+                              onClick={() => toggleDoNextSelect(idx)}
+                              className="flex items-start gap-2 flex-1 cursor-pointer"
+                            >
+                              <button type="button" className="mt-0.5 text-slate-400 hover:text-emerald-400">
+                                {isSelected ? (
+                                  <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                )}
+                              </button>
+                              <div>
+                                <div className="font-bold text-emerald-300 text-xs">
+                                  <span>{title}</span>
+                                  {gain && (
+                                    <span className="text-[10px] font-mono text-emerald-400 ml-2 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                                      +{gain} pts
+                                    </span>
+                                  )}
+                                </div>
+                                {reason && <p className="text-[11px] text-slate-400 mt-0.5">{reason}</p>}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() =>
+                                handleSaveItemToMemory(
+                                  title,
+                                  reason || 'AI Advisor Action Step',
+                                  'note',
+                                  `cockpit-donext-${idx}`
+                                )
+                              }
+                              disabled={isSaved}
+                              className={`p-1.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer flex-shrink-0 ${
+                                isSaved
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              {isSaved ? <Check className="w-3 h-3 text-emerald-400" /> : <Bookmark className="w-3 h-3" />}
+                              <span>{isSaved ? 'บันทึกแล้ว' : 'บันทึก'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-slate-200 leading-relaxed font-mono">{String(aiAdvice.doNext)}</p>
+                )}
+              </div>
+            )}
+
+            {/* 3. DO NOT PRIORITIZE YET */}
+            {aiAdvice.doNotPrioritizeYet && (
+              <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-slate-400 font-bold text-xs flex items-center gap-1">
+                    <span>🛡️ DO NOT PRIORITIZE YET (ยังไม่ต้องทำตอนนี้):</span>
+                  </div>
+                  <button
+                    onClick={() =>
+                      handleSaveItemToMemory(
+                        `Decision: ไม่ต้องรีบทำ (${project.name})`,
+                        Array.isArray(aiAdvice.doNotPrioritizeYet)
+                          ? aiAdvice.doNotPrioritizeYet.join('\n• ')
+                          : String(aiAdvice.doNotPrioritizeYet),
+                        'decision',
+                        'cockpit-nopriority-1'
+                      )
+                    }
+                    disabled={savedMemoryIds['cockpit-nopriority-1']}
+                    className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      savedMemoryIds['cockpit-nopriority-1']
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    {savedMemoryIds['cockpit-nopriority-1'] ? <Check className="w-3 h-3 text-emerald-400" /> : <Bookmark className="w-3 h-3" />}
+                    <span>{savedMemoryIds['cockpit-nopriority-1'] ? 'บันทึกแล้ว ✓' : 'บันทึกเป็นการตัดสินใจ'}</span>
+                  </button>
+                </div>
+
+                {Array.isArray(aiAdvice.doNotPrioritizeYet) ? (
+                  <ul className="list-disc list-inside text-slate-400 text-[11px] space-y-1">
+                    {aiAdvice.doNotPrioritizeYet.map((item: any, idx: number) => (
+                      <li key={idx}>{typeof item === 'object' ? JSON.stringify(item) : String(item)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-slate-400 leading-relaxed">{String(aiAdvice.doNotPrioritizeYet)}</p>
+                )}
               </div>
             )}
           </div>
         ) : (
           <p className="text-xs text-slate-400">
-            💡 กดปุ่ม <strong>[✨ ขอคำแนะนำ AI]</strong> เพื่อให้ Typhoon วิเคราะห์ลำดับงานที่ควรทำ และสิ่งที่ไม่ต้องรีบทำตอนนี้!
+            💡 กดปุ่ม <strong>[✨ ขอคำแนะนำ AI]</strong> เพื่อให้ Typhoon วิเคราะห์ลำดับงานที่ควรทำ ติ๊กเลือกข้อที่ต้องการ แล้วกดบันทึกลงไทม์ไลน์ความทรงจำได้ทันที!
           </p>
         )}
       </section>
