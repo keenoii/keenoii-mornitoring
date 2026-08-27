@@ -42,7 +42,9 @@ export interface OfficeStaffMember {
   statusText?: string;
   assignedProjectId?: string;
   assignedProjectName?: string;
+  assignmentRole?: 'lead' | 'contributor' | 'reviewer';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface OfficeBuilding {

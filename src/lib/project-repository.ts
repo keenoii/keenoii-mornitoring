@@ -32,7 +32,6 @@ export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promis
       ?, ?, ?, ?, ?, datetime('now')
     )
     ON CONFLICT(path) DO UPDATE SET
-      id = excluded.id,
       name = excluded.name,
       slug = excluded.slug,
       relativePath = excluded.relativePath,
@@ -54,7 +53,7 @@ export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promis
   `);
 
   const insertMetricStmt = db.prepare(`
-    INSERT INTO project_metrics (
+    INSERT OR REPLACE INTO project_metrics (
       projectId, todoCount, fixmeCount, totalFiles, hasReadme, hasDocker,
       hasKubernetes, hasTests, gitBranch, gitIsDirty, gitUncommittedFiles,
       gitLastCommitDate, gitLastCommitMsg, gitLastCommitAuthor, gitRemoteUrl,
@@ -65,173 +64,152 @@ export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promis
       ?, ?, ?, ?,
       ?, ?
     )
-    ON CONFLICT(projectId) DO UPDATE SET
-      todoCount = excluded.todoCount,
-      fixmeCount = excluded.fixmeCount,
-      totalFiles = excluded.totalFiles,
-      hasReadme = excluded.hasReadme,
-      hasDocker = excluded.hasDocker,
-      hasKubernetes = excluded.hasKubernetes,
-      hasTests = excluded.hasTests,
-      gitBranch = excluded.gitBranch,
-      gitIsDirty = excluded.gitIsDirty,
-      gitUncommittedFiles = excluded.gitUncommittedFiles,
-      gitLastCommitDate = excluded.gitLastCommitDate,
-      gitLastCommitMsg = excluded.gitLastCommitMsg,
-      gitLastCommitAuthor = excluded.gitLastCommitAuthor,
-      gitRemoteUrl = excluded.gitRemoteUrl,
-      readmePreview = excluded.readmePreview,
-      todoSamples = excluded.todoSamples
   `);
 
   const insertHealthStmt = db.prepare(`
-    INSERT INTO health_breakdowns (
+    INSERT OR REPLACE INTO health_breakdowns (
       projectId, gitActivity, documentation, buildStatus, tests, deployment,
       openTasks, freshness, total
     ) VALUES (
       ?, ?, ?, ?, ?, ?,
       ?, ?, ?
     )
-    ON CONFLICT(projectId) DO UPDATE SET
-      gitActivity = excluded.gitActivity,
-      documentation = excluded.documentation,
-      buildStatus = excluded.buildStatus,
-      tests = excluded.tests,
-      deployment = excluded.deployment,
-      openTasks = excluded.openTasks,
-      freshness = excluded.freshness,
-      total = excluded.total
   `);
 
   const deleteMilestonesStmt = db.prepare(`DELETE FROM milestones WHERE projectId = ?`);
   const insertMilestoneStmt = db.prepare(`
-    INSERT INTO milestones (id, projectId, name, status, description, ordering)
+    INSERT OR REPLACE INTO milestones (id, projectId, name, status, description, ordering)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   const deleteAttentionStmt = db.prepare(`DELETE FROM attention_items WHERE projectId = ?`);
   const insertAttentionStmt = db.prepare(`
-    INSERT INTO attention_items (id, projectId, itemKey, severity, title, reason)
+    INSERT OR REPLACE INTO attention_items (id, projectId, itemKey, severity, title, reason)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   const deleteSubmodulesStmt = db.prepare(`DELETE FROM submodules WHERE projectId = ?`);
   const insertSubmoduleStmt = db.prepare(`
-    INSERT INTO submodules (id, projectId, name, relativePath, type, frameworks)
+    INSERT OR REPLACE INTO submodules (id, projectId, name, relativePath, type, frameworks)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   for (const p of projects) {
-    const normPath = p.path.replace(/\\/g, '/').toLowerCase();
-    const existing = existingProjectMap.get(normPath);
+    try {
+      const normPath = p.path.replace(/\\/g, '/').toLowerCase();
+      const existing = existingProjectMap.get(normPath);
+      const effectiveId = existing?.id || p.id;
 
-    const effectiveUrl = p.healthUrl || existing?.healthUrl || null;
-    const effectiveStage = p.hasConfigYaml ? p.stage : (effectiveUrl ? 'Production' : (existing?.stage || p.stage));
-    const effectiveStatus = p.hasConfigYaml ? p.status : (effectiveUrl ? 'COMPLETED' : (existing?.status || p.status));
-    const effectivePriority = p.hasConfigYaml ? p.priority : (existing?.priority || p.priority);
-    const effectiveProgress = p.hasConfigYaml ? p.progress : (effectiveUrl ? 100 : (existing?.progress ?? p.progress));
-    const effectiveDescription = p.hasConfigYaml ? p.config?.description : (existing?.description || p.config?.description || null);
+      const effectiveUrl = p.healthUrl || existing?.healthUrl || null;
+      const effectiveStage = p.hasConfigYaml ? p.stage : (effectiveUrl ? 'Production' : (existing?.stage || p.stage));
+      const effectiveStatus = p.hasConfigYaml ? p.status : (effectiveUrl ? 'COMPLETED' : (existing?.status || p.status));
+      const effectivePriority = p.hasConfigYaml ? p.priority : (existing?.priority || p.priority);
+      const effectiveProgress = p.hasConfigYaml ? p.progress : (effectiveUrl ? 100 : (existing?.progress ?? p.progress));
+      const effectiveDescription = p.hasConfigYaml ? p.config?.description : (existing?.description || p.config?.description || null);
 
-    // 1. Project Core
-    insertProjectStmt.run(
-      p.id,
-      p.name,
-      p.slug,
-      p.path,
-      p.relativePath,
-      p.detectedType.primaryType,
-      JSON.stringify(p.detectedType.frameworks || []),
-      effectiveStatus,
-      effectiveStage,
-      effectivePriority,
-      effectiveProgress,
-      p.health.total,
-      p.health.tier,
-      p.health.color,
-      effectiveUrl,
-      p.hasConfigYaml ? 1 : 0,
-      effectiveDescription,
-      p.metrics.lastModifiedDate || null,
-      p.scannedAt
-    );
+      // 1. Project Core
+      insertProjectStmt.run(
+        effectiveId,
+        p.name,
+        p.slug,
+        p.path,
+        p.relativePath,
+        p.detectedType.primaryType,
+        JSON.stringify(p.detectedType.frameworks || []),
+        effectiveStatus,
+        effectiveStage,
+        effectivePriority,
+        effectiveProgress,
+        p.health.total,
+        p.health.tier,
+        p.health.color,
+        effectiveUrl,
+        p.hasConfigYaml ? 1 : 0,
+        effectiveDescription,
+        p.metrics.lastModifiedDate || null,
+        p.scannedAt
+      );
 
-    // 2. Metrics
-    insertMetricStmt.run(
-      p.id,
-      p.metrics.todoCount || 0,
-      p.metrics.fixmeCount || 0,
-      p.metrics.totalFiles || 0,
-      p.metrics.hasReadme ? 1 : 0,
-      p.metrics.hasDocker ? 1 : 0,
-      p.metrics.hasKubernetes ? 1 : 0,
-      p.metrics.hasTests ? 1 : 0,
-      p.git.branch || null,
-      p.git.isDirty ? 1 : 0,
-      p.git.uncommittedFiles || 0,
-      p.git.lastCommitDate || null,
-      p.git.lastCommitMessage || null,
-      p.git.lastCommitAuthor || null,
-      p.git.remoteUrl || null,
-      p.metrics.readmePreview || null,
-      JSON.stringify(p.metrics.todoSamples || [])
-    );
+      // 2. Metrics
+      insertMetricStmt.run(
+        effectiveId,
+        p.metrics.todoCount || 0,
+        p.metrics.fixmeCount || 0,
+        p.metrics.totalFiles || 0,
+        p.metrics.hasReadme ? 1 : 0,
+        p.metrics.hasDocker ? 1 : 0,
+        p.metrics.hasKubernetes ? 1 : 0,
+        p.metrics.hasTests ? 1 : 0,
+        p.git.branch || null,
+        p.git.isDirty ? 1 : 0,
+        p.git.uncommittedFiles || 0,
+        p.git.lastCommitDate || null,
+        p.git.lastCommitMessage || null,
+        p.git.lastCommitAuthor || null,
+        p.git.remoteUrl || null,
+        p.metrics.readmePreview || null,
+        JSON.stringify(p.metrics.todoSamples || [])
+      );
 
-    // 3. Health Breakdown
-    insertHealthStmt.run(
-      p.id,
-      p.health.gitActivity,
-      p.health.documentation,
-      p.health.buildStatus,
-      p.health.tests,
-      p.health.deployment,
-      p.health.openTasks,
-      p.health.freshness,
-      p.health.total
-    );
+      // 3. Health Breakdown
+      insertHealthStmt.run(
+        effectiveId,
+        p.health.gitActivity,
+        p.health.documentation,
+        p.health.buildStatus,
+        p.health.tests,
+        p.health.deployment,
+        p.health.openTasks,
+        p.health.freshness,
+        p.health.total
+      );
 
-    // 4. Milestones
-    deleteMilestonesStmt.run(p.id);
-    if (p.milestones && p.milestones.length > 0) {
-      p.milestones.forEach((m, idx) => {
-        insertMilestoneStmt.run(
-          `${p.id}-m-${idx}`,
-          p.id,
-          m.name,
-          m.status,
-          m.description || null,
-          idx
-        );
-      });
-    }
+      // 4. Milestones
+      deleteMilestonesStmt.run(effectiveId);
+      if (p.milestones && p.milestones.length > 0) {
+        p.milestones.forEach((m, idx) => {
+          insertMilestoneStmt.run(
+            `${effectiveId}-m-${idx}`,
+            effectiveId,
+            m.name,
+            m.status,
+            m.description || null,
+            idx
+          );
+        });
+      }
 
-    // 5. Attention Items
-    deleteAttentionStmt.run(p.id);
-    if (p.attentionItems && p.attentionItems.length > 0) {
-      p.attentionItems.forEach((item, idx) => {
-        insertAttentionStmt.run(
-          `${p.id}-att-${idx}`,
-          p.id,
-          item.id,
-          item.severity,
-          item.title,
-          item.reason
-        );
-      });
-    }
+      // 5. Attention Items
+      deleteAttentionStmt.run(effectiveId);
+      if (p.attentionItems && p.attentionItems.length > 0) {
+        p.attentionItems.forEach((item, idx) => {
+          insertAttentionStmt.run(
+            `${effectiveId}-att-${idx}`,
+            effectiveId,
+            item.id,
+            item.severity,
+            item.title,
+            item.reason
+          );
+        });
+      }
 
-    // 6. Submodules
-    deleteSubmodulesStmt.run(p.id);
-    if (p.submodules && p.submodules.length > 0) {
-      p.submodules.forEach((sub, idx) => {
-        insertSubmoduleStmt.run(
-          `${p.id}-sub-${idx}`,
-          p.id,
-          sub.name,
-          sub.relativePath,
-          sub.type,
-          JSON.stringify(sub.frameworks || [])
-        );
-      });
+      // 6. Submodules
+      deleteSubmodulesStmt.run(effectiveId);
+      if (p.submodules && p.submodules.length > 0) {
+        p.submodules.forEach((sub, idx) => {
+          insertSubmoduleStmt.run(
+            `${effectiveId}-sub-${idx}`,
+            effectiveId,
+            sub.name,
+            sub.relativePath,
+            sub.type,
+            JSON.stringify(sub.frameworks || [])
+          );
+        });
+      }
+    } catch (itemErr) {
+      console.error(`Error saving project ${p.name} to DB:`, itemErr);
     }
   }
 

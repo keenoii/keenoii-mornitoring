@@ -154,10 +154,30 @@ db.exec(`
     updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS office_staff (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    avatarEmoji TEXT NOT NULL DEFAULT '👨‍💻',
+    buildingId TEXT NOT NULL DEFAULT 'bldg-main-hq',
+    deskId TEXT NOT NULL,
+    roomType TEXT NOT NULL DEFAULT 'web',
+    status TEXT NOT NULL DEFAULT 'active',
+    statusText TEXT,
+    assignedProjectId TEXT,
+    assignedProjectName TEXT,
+    assignmentRole TEXT NOT NULL DEFAULT 'lead', -- 'lead', 'contributor', 'reviewer'
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
   CREATE INDEX IF NOT EXISTS idx_projects_stage ON projects(stage);
   CREATE INDEX IF NOT EXISTS idx_projects_healthTier ON projects(healthTier);
   CREATE INDEX IF NOT EXISTS idx_memories_projectId ON project_memories(projectId);
+  CREATE INDEX IF NOT EXISTS idx_office_staff_building ON office_staff(buildingId);
+  CREATE INDEX IF NOT EXISTS idx_office_staff_desk ON office_staff(deskId);
+  CREATE INDEX IF NOT EXISTS idx_office_staff_project ON office_staff(assignedProjectId);
 `);
 
 export default db;

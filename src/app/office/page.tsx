@@ -26,6 +26,7 @@ import {
 } from '@/lib/studio-classifier';
 import { ProjectWorker } from '@/components/virtual-office/ProjectWorker';
 import { IsometricOfficeView } from '@/components/virtual-office/IsometricOfficeView';
+import { StudioMatrixCockpit } from '@/components/virtual-office/StudioMatrixCockpit';
 import { GlobalHeader } from '@/components/common/GlobalHeader';
 import { WorkspaceRootsBar, MonitoredRoot } from '@/components/dashboard/WorkspaceRootsBar';
 import { APP_SETTINGS } from '@/config/app-settings';
@@ -37,13 +38,10 @@ import { EditProjectUrlModal } from '@/components/dashboard/EditProjectUrlModal'
 import { LiveHealthStatus } from '@/services/live-health-service';
 import {
   OfficeBuilding,
-  OfficeStaffMember,
   DEFAULT_BUILDINGS,
-  DEFAULT_STAFF_MEMBERS,
 } from '@/lib/office-buildings-config';
 import { OfficeBuildingsBar } from '@/components/virtual-office/OfficeBuildingsBar';
 import { ManageBuildingsModal } from '@/components/virtual-office/ManageBuildingsModal';
-import { ManageStaffModal } from '@/components/virtual-office/ManageStaffModal';
 import { OfficeChangeBgModal } from '@/components/virtual-office/OfficeChangeBgModal';
 
 const DEFAULT_ROOTS: MonitoredRoot[] = [
@@ -62,7 +60,7 @@ export default function VirtualProjectOfficePage() {
 
   // Workspace Roots
   const [monitoredRoots, setMonitoredRoots] = useState<MonitoredRoot[]>(DEFAULT_ROOTS);
-  const [activeRootId, setActiveRootId] = useState<string>('srru');
+  const [activeRootId, setActiveRootId] = useState<string>('ALL_REGISTERED');
   const [showManageModal, setShowManageModal] = useState<boolean>(false);
   const [newRootPath, setNewRootPath] = useState<string>('');
   const [newRootName, setNewRootName] = useState<string>('');
@@ -82,16 +80,13 @@ export default function VirtualProjectOfficePage() {
   const [customStudioOverrides, setCustomStudioOverrides] = useState<Record<string, string>>({});
   const [overrideSavedSuccess, setOverrideSavedSuccess] = useState<boolean>(false);
 
-  // Buildings & Staff States
+  // Buildings States
   const [buildings, setBuildings] = useState<OfficeBuilding[]>(DEFAULT_BUILDINGS);
   const [activeBuildingId, setActiveBuildingId] = useState<string>('bldg-main-hq');
-  const [staffList, setStaffList] = useState<OfficeStaffMember[]>(DEFAULT_STAFF_MEMBERS);
-  const [displayMode, setDisplayMode] = useState<'projects' | 'staff'>('projects');
 
-  // Modals for Building & Staff
+  // Modals for Building
   const [showManageBuildingsModal, setShowManageBuildingsModal] = useState<boolean>(false);
   const [showChangeBgModal, setShowChangeBgModal] = useState<boolean>(false);
-  const [showManageStaffModal, setShowManageStaffModal] = useState<boolean>(false);
 
   // AI Advisor States
   const [aiAdvice, setAiAdvice] = useState<any | null>(null);
@@ -102,7 +97,7 @@ export default function VirtualProjectOfficePage() {
 
   // Load Starred, Roots, Hidden, Buildings & Staff from localStorage
   useEffect(() => {
-    let targetActiveId = 'srru';
+    let targetActiveId = 'ALL_REGISTERED';
     let targetRootsList = DEFAULT_ROOTS;
 
     try {
@@ -119,9 +114,9 @@ export default function VirtualProjectOfficePage() {
       if (savedActiveRootId) {
         targetActiveId = savedActiveRootId;
         setActiveRootId(savedActiveRootId);
-      } else if (targetRootsList.length > 0) {
-        targetActiveId = targetRootsList[0].id;
-        setActiveRootId(targetRootsList[0].id);
+      } else {
+        targetActiveId = 'ALL_REGISTERED';
+        setActiveRootId('ALL_REGISTERED');
       }
 
       const savedStars = localStorage.getItem('sentinel_starred_projects');
@@ -144,12 +139,6 @@ export default function VirtualProjectOfficePage() {
 
       const savedActiveBldg = localStorage.getItem('sentinel_active_building_id');
       if (savedActiveBldg) setActiveBuildingId(savedActiveBldg);
-
-      const savedStaff = localStorage.getItem('sentinel_office_staff');
-      if (savedStaff) setStaffList(JSON.parse(savedStaff));
-
-      const savedDisplayMode = localStorage.getItem('sentinel_office_display_mode');
-      if (savedDisplayMode === 'staff' || savedDisplayMode === 'projects') setDisplayMode(savedDisplayMode);
     } catch {}
 
     fetchOfficeProjects(false, targetActiveId, targetRootsList);
@@ -204,37 +193,6 @@ export default function VirtualProjectOfficePage() {
     } catch {}
   };
 
-  const handleAddStaff = (newStaff: OfficeStaffMember) => {
-    const updated = [...staffList, newStaff];
-    setStaffList(updated);
-    try {
-      localStorage.setItem('sentinel_office_staff', JSON.stringify(updated));
-    } catch {}
-  };
-
-  const handleUpdateStaff = (updatedStaff: OfficeStaffMember) => {
-    const updated = staffList.map((s) => (s.id === updatedStaff.id ? updatedStaff : s));
-    setStaffList(updated);
-    try {
-      localStorage.setItem('sentinel_office_staff', JSON.stringify(updated));
-    } catch {}
-  };
-
-  const handleDeleteStaff = (staffId: string) => {
-    const updated = staffList.filter((s) => s.id !== staffId);
-    setStaffList(updated);
-    try {
-      localStorage.setItem('sentinel_office_staff', JSON.stringify(updated));
-    } catch {}
-  };
-
-  const handleToggleDisplayMode = (mode: 'projects' | 'staff') => {
-    setDisplayMode(mode);
-    try {
-      localStorage.setItem('sentinel_office_display_mode', mode);
-    } catch {}
-  };
-
   const toggleHideProject = (projectId: string) => {
     setHiddenProjectIds((prev) => {
       const next = prev.includes(projectId)
@@ -252,6 +210,18 @@ export default function VirtualProjectOfficePage() {
     try {
       localStorage.removeItem('sentinel_hidden_projects');
     } catch {}
+  };
+
+  const handleToggleStar = (projectId: string) => {
+    setStarredProjectIds((prev) => {
+      const next = prev.includes(projectId)
+        ? prev.filter((id) => id !== projectId)
+        : [...prev, projectId];
+      try {
+        localStorage.setItem('sentinel_starred_projects', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   };
 
   const currentRoot = useMemo(() => {
@@ -444,21 +414,28 @@ export default function VirtualProjectOfficePage() {
 
       const liveStatus = liveStatuses[p.id];
       const isLiveOffline = liveStatus && !liveStatus.isOnline;
-      const isLiveOnline = Boolean(p.healthUrl || p.config?.health_url);
+      const isCriticalOrBlocked =
+        isLiveOffline ||
+        p.health.total < APP_SETTINGS.healthThresholds.risk ||
+        p.status === 'BLOCKED';
+
       const isCompletedOrDormant =
-        isLiveOnline ||
         p.health.isSmartStale ||
         p.status === 'STALE' ||
         p.status === 'COMPLETED' ||
         p.stage === 'Production';
 
-      // 1. Emergency: Live Outage -> War Room
-      if (isLiveOffline || ((p.health.total < 50 && p.health.tier === 'Critical') || p.status === 'BLOCKED')) {
-        studioMap.warroom.push({ project: p, workerState: 'alert', classification });
+      // 1. Emergency: Live Outage / Health < 60 / Blocked -> War Room
+      if (isCriticalOrBlocked) {
+        studioMap.warroom.push({
+          project: p,
+          workerState: isLiveOffline ? 'alert' : 'fixing',
+          classification,
+        });
         return;
       }
 
-      // 2. Production (Online) / Completed / Stale (>14d) -> Archive & Dormant Lounge (ห้องนอน)
+      // 2. Production / Completed / Stale (>14d) with Healthy Score -> Archive & Dormant Lounge (ห้องนอน)
       if (isCompletedOrDormant) {
         studioMap.archive.push({ project: p, workerState: 'sleeping', classification });
         return;
@@ -551,17 +528,13 @@ export default function VirtualProjectOfficePage() {
         onOpenManageModal={() => setShowManageModal(true)}
       />
 
-      {/* 2.5 OFFICE BUILDINGS & STAFF BAR */}
+      {/* 2.5 OFFICE BUILDINGS BAR */}
       <OfficeBuildingsBar
         buildings={buildings}
         activeBuildingId={activeBuildingId}
         onSelectBuilding={handleSelectBuilding}
         onOpenManageBuildings={() => setShowManageBuildingsModal(true)}
         onOpenChangeBg={() => setShowChangeBgModal(true)}
-        onOpenManageStaff={() => setShowManageStaffModal(true)}
-        displayMode={displayMode}
-        onToggleDisplayMode={handleToggleDisplayMode}
-        totalStaffCount={staffList.filter((s) => s.buildingId === activeBuildingId).length}
       />
 
       {/* 3. DUAL VIEW MODE SWITCHER & CONTROLS */}
@@ -623,100 +596,26 @@ export default function VirtualProjectOfficePage() {
             onSelectStudio={(studio) => setSelectedStudio(studio)}
             onSelectProject={(project) => setQuickProject(project)}
             liveStatuses={liveStatuses}
-            staffList={staffList.filter((s) => s.buildingId === activeBuildingId)}
-            displayMode={displayMode}
             bgImageSrc={activeBuilding?.bgImageSrc}
-            onOpenManageStaff={() => setShowManageStaffModal(true)}
             onOpenChangeBg={() => setShowChangeBgModal(true)}
           />
         </section>
       ) : (
         <section className="space-y-4">
-          {/* War Room Banner */}
-          {classifiedData.warroom.length > 0 && (
-            <div className="p-5 rounded-3xl bg-gradient-to-br from-rose-950/60 via-slate-900 to-slate-950 border border-rose-500/60 shadow-2xl space-y-4">
-              <div className="flex items-center justify-between border-b border-rose-500/30 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">🚨</span>
-                  <div>
-                    <h2 className="text-base font-black text-white">WAR ROOM (ห้องควบคุมวิกฤตและความเสี่ยง)</h2>
-                    <span className="text-xs text-rose-300/80">{classifiedData.warroom.length} Projects Inside</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedStudio(VIRTUAL_STUDIOS.find((s) => s.id === 'warroom') || null)}
-                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  เปิดดูทั้งหมด
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {classifiedData.warroom.slice(0, 6).map(({ project, workerState }) => (
-                  <ProjectWorker
-                    key={project.id}
-                    project={project}
-                    workerState={workerState}
-                    isStarred={starredProjectIds.includes(project.id)}
-                    onClick={() => setQuickProject(project)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Studios Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {VIRTUAL_STUDIOS.filter((s) => !s.isDynamic).map((studio) => {
-              const studioWorkers = classifiedData[studio.id] || [];
-              const avgHealth =
-                studioWorkers.length > 0
-                  ? Math.round(
-                      studioWorkers.reduce((acc, curr) => acc + curr.project.health.total, 0) /
-                        studioWorkers.length
-                    )
-                  : 0;
-
-              return (
-                <div
-                  key={studio.id}
-                  onClick={() => setSelectedStudio(studio)}
-                  className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 transition-all cursor-pointer shadow-lg hover:shadow-indigo-950/20 group flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{studio.icon}</span>
-                        <div>
-                          <h3 className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors">
-                            {studio.name}
-                          </h3>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {studioWorkers.length} Projects
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="text-xs font-black text-emerald-400">{avgHealth} pts</span>
-                        <div className="text-[9px] text-slate-500">Avg Health</div>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-400 line-clamp-2 mb-3">{studio.description}</p>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-500 text-[10px]">คลิกเพื่อเปิด Studio Cockpit</span>
-                    <span className="text-indigo-400 font-bold group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
-                      <span>สำรวจ</span>
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <StudioMatrixCockpit
+            projects={projects}
+            classifiedData={classifiedData}
+            starredProjectIds={starredProjectIds}
+            liveStatuses={liveStatuses}
+            onSelectProject={(project) => setQuickProject(project)}
+            onOpenAdvisor={(project) => {
+              setAdvisorProject(project);
+              setAiAdvice(null);
+            }}
+            onEditUrl={(project) => setSelectedProjectForUrl(project)}
+            onToggleStar={handleToggleStar}
+            searchQuery={searchQuery}
+          />
         </section>
       )}
 
@@ -882,18 +781,6 @@ export default function VirtualProjectOfficePage() {
         onClose={() => setShowChangeBgModal(false)}
         currentBg={activeBuilding?.bgImageSrc || '/room/room-office.png'}
         onApply={handleApplyBackground}
-      />
-
-      {/* 13. MANAGE STAFF & WORKERS MODAL */}
-      <ManageStaffModal
-        isOpen={showManageStaffModal}
-        onClose={() => setShowManageStaffModal(false)}
-        staffList={staffList}
-        activeBuildingId={activeBuildingId}
-        allProjects={projects}
-        onAddStaff={handleAddStaff}
-        onUpdateStaff={handleUpdateStaff}
-        onDeleteStaff={handleDeleteStaff}
       />
     </div>
   );

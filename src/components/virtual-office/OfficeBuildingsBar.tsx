@@ -5,11 +5,6 @@ import {
   Building2,
   Plus,
   Image as ImageIcon,
-  Users,
-  Settings,
-  Sparkles,
-  Layers,
-  Bot,
 } from 'lucide-react';
 import { OfficeBuilding } from '@/lib/office-buildings-config';
 
@@ -19,10 +14,6 @@ interface OfficeBuildingsBarProps {
   onSelectBuilding: (id: string) => void;
   onOpenManageBuildings: () => void;
   onOpenChangeBg: () => void;
-  onOpenManageStaff: () => void;
-  displayMode: 'projects' | 'staff';
-  onToggleDisplayMode: (mode: 'projects' | 'staff') => void;
-  totalStaffCount: number;
 }
 
 export const OfficeBuildingsBar: React.FC<OfficeBuildingsBarProps> = ({
@@ -31,10 +22,6 @@ export const OfficeBuildingsBar: React.FC<OfficeBuildingsBarProps> = ({
   onSelectBuilding,
   onOpenManageBuildings,
   onOpenChangeBg,
-  onOpenManageStaff,
-  displayMode,
-  onToggleDisplayMode,
-  totalStaffCount,
 }) => {
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-900/90 p-3 rounded-2xl border border-slate-800 backdrop-blur-md shadow-lg">
@@ -80,55 +67,16 @@ export const OfficeBuildingsBar: React.FC<OfficeBuildingsBarProps> = ({
         </button>
       </div>
 
-      {/* Right: Quick Tool Buttons & View Persona Switcher */}
+      {/* Right: Quick Tool Buttons */}
       <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
-        {/* Dual Mode Switcher: Projects vs Staff */}
-        <div className="p-1 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-1 shadow-inner">
-          <button
-            onClick={() => onToggleDisplayMode('projects')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              displayMode === 'projects'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="แสดงผลตามสถานะโปรเจกต์ที่สแกนเจอจริง"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>โปรเจกต์</span>
-          </button>
-
-          <button
-            onClick={() => onToggleDisplayMode('staff')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              displayMode === 'staff'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="แสดงผลตามทีมงาน/พนักงานที่บรรจุไว้ประจำแต่ละโต๊ะ"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>พนักงาน ({totalStaffCount})</span>
-          </button>
-        </div>
-
         {/* Change Background Button */}
         <button
           onClick={onOpenChangeBg}
-          className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-700/80 hover:border-indigo-500/60 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+          className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-700/80 hover:border-indigo-500/60 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
           title="เปลี่ยนภาพพื้นหลังของอาคารนี้"
         >
           <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-          <span>เปลี่ยนพื้นหลัง</span>
-        </button>
-
-        {/* Manage Staff Button */}
-        <button
-          onClick={onOpenManageStaff}
-          className="px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-          title="เพิ่ม ลบ หรือย้ายตำแหน่งพนักงานประจำแต่ละโต๊ะ"
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>จัดการพนักงาน</span>
+          <span>🖼️ เปลี่ยนพื้นหลัง</span>
         </button>
       </div>
     </div>
