@@ -6,6 +6,15 @@ import { computeProjectHealth } from '@/lib/health';
 import { saveScanResultsToDb, getProjectsFromDb } from '@/lib/project-repository';
 import { computeScanDiff } from '@/collector/diff';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const forceRefresh = searchParams.get('refresh') === 'true';
@@ -84,20 +93,23 @@ export async function GET(request: Request) {
 
         const intelligence = computeScanDiff(dbProjects);
 
-        return NextResponse.json({
-          scannedRoots: rootsToScan,
-          totalProjects: dbProjects.length,
-          activeCount,
-          needAttentionCount,
-          staleCount,
-          blockedCount,
-          completedCount,
-          projects: dbProjects,
-          intelligence,
-          scanDurationMs: 5,
-          scannedAt: dbProjects[0]?.scannedAt || new Date().toISOString(),
-          fromDatabase: true,
-        });
+        return NextResponse.json(
+          {
+            scannedRoots: rootsToScan,
+            totalProjects: dbProjects.length,
+            activeCount,
+            needAttentionCount,
+            staleCount,
+            blockedCount,
+            completedCount,
+            projects: dbProjects,
+            intelligence,
+            scanDurationMs: 5,
+            scannedAt: dbProjects[0]?.scannedAt || new Date().toISOString(),
+            fromDatabase: true,
+          },
+          { headers: NO_CACHE_HEADERS }
+        );
       }
     } catch {
       // Fallback to live scan if DB query fails
@@ -129,16 +141,19 @@ export async function GET(request: Request) {
       console.error('Failed to save scan results to SQLite:', err);
     }
 
-    return NextResponse.json({
-      ...summary,
-      projects: projectsWithHealth,
-      intelligence,
-      fromDatabase: false,
-    });
+    return NextResponse.json(
+      {
+        ...summary,
+        projects: projectsWithHealth,
+        intelligence,
+        fromDatabase: false,
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || 'Failed to scan projects' },
-      { status: 500 }
+      { status: 500, headers: NO_CACHE_HEADERS }
     );
   }
 }

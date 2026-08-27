@@ -171,7 +171,10 @@ export default function CommandCenterPage() {
 
       if (params.toString()) url += `?${params.toString()}`;
 
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+      });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json: ScanResponse = await res.json();
       setData(json);

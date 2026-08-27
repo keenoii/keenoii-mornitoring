@@ -170,7 +170,10 @@ export default function VirtualProjectOfficePage() {
 
       if (params.toString()) url += `?${params.toString()}`;
 
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+      });
       if (!res.ok) throw new Error('Failed to load project portfolio');
       const json = await res.json();
       setProjects(json.projects || []);

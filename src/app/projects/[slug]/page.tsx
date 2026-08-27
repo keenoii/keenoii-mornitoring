@@ -86,7 +86,10 @@ export default function ProjectMemoryCockpitPage({
     setError(null);
     try {
       // 1. Fetch project list from scan API
-      const res = await fetch('/api/scan');
+      const res = await fetch('/api/scan', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+      });
       if (!res.ok) throw new Error('Failed to load project metadata');
       const json = await res.json();
 
@@ -114,7 +117,10 @@ export default function ProjectMemoryCockpitPage({
       } catch {}
 
       // 2. Fetch Project Memory & Goals
-      const memRes = await fetch(`/api/projects/${encodeURIComponent(match.id)}/memory`);
+      const memRes = await fetch(`/api/projects/${encodeURIComponent(match.id)}/memory`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+      });
       if (memRes.ok) {
         const memJson = await memRes.json();
         if (memJson.goal) {

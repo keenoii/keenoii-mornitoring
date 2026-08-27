@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getProjectGoal, saveProjectGoal, getProjectMemories, addProjectMemory } from '@/lib/project-memory';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -10,15 +19,18 @@ export async function GET(
     const goal = getProjectGoal(id);
     const memories = getProjectMemories(id);
 
-    return NextResponse.json({
-      projectId: id,
-      goal,
-      memories,
-    });
+    return NextResponse.json(
+      {
+        projectId: id,
+        goal,
+        memories,
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || 'Failed to fetch project memory' },
-      { status: 500 }
+      { status: 500, headers: NO_CACHE_HEADERS }
     );
   }
 }
