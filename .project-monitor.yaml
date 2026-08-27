@@ -1,0 +1,59 @@
+# .project-monitor.yaml
+name: KEENOII Project Sentinel
+description: AI Project Portfolio Command Center & Engineering Intelligence for developer projects
+status: active
+stage: development
+priority: high
+progress: 90
+
+repository:
+  type: git
+
+milestones:
+  - name: System Specifications & Architecture Guidelines
+    status: done
+  - name: Local Project Collector (Fast Native Git & Multi-Depth Scanner)
+    status: done
+  - name: Local Relational Database Persistence (Native SQLite Engine)
+    status: done
+  - name: Health Score & Attention Rule Engine (100-pt + Smart Stale)
+    status: done
+  - name: Interactive Health Score Explainer (Why & How-to-improve)
+    status: done
+  - name: Multi-Provider AI Advisor (Typhoon v2.5 30B, Ollama, Gemini, Rule Engine)
+    status: done
+  - name: Evidence-Based AI Analysis & "Do Not Prioritize Yet" System
+    status: done
+  - name: Morning Project Intelligence Cockpit & Scan Diff Engine
+    status: done
+  - name: User Starred & Active Focus Project Pinning System
+    status: done
+  - name: Project Memory & Developer Cockpit (/projects/[slug])
+    status: done
+  - name: Cyberpunk 2.5D Holographic Virtual Office Diorama (/office)
+    status: done
+  - name: Virtual Studio Cockpit, Classification Inspector & Office Tour Engine
+    status: done
+  - name: Live Runtime Health Ping & Deployment Inspections (SSL/HTTP)
+    status: todo
+  - name: Docker & Kubernetes Cluster Container Inspections
+    status: todo
+
+monitor:
+  git: true
+  build: true
+  health: true
+  todo: true
+
+ai:
+  enabled: true
+  provider: typhoon
+  model: typhoon-v2.5-30b-a3b-instruct
+  include:
+    - README.md
+    - spec_projecct.md
+    - AGENTS.md
+  exclude:
+    - .env*
+    - node_modules/
+    - .git/

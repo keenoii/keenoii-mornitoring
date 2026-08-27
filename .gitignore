@@ -1,0 +1,17 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# next.js
+.next
+out
+build
+
+# env
+.env*.local
+.env
+
+# local db
+data/*.db
+data/*.db-*

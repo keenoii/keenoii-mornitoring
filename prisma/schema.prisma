@@ -1,0 +1,143 @@
+// Prisma Schema for KEENOII Project Sentinel (SQLite Local-First Database)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./sentinel.db"
+}
+
+model Project {
+  id              String   @id
+  name            String
+  slug            String
+  path            String   @unique
+  relativePath    String
+  primaryType     String
+  frameworks      String   @default("[]") // JSON string array
+  status          String   @default("ACTIVE") // DISCOVERED | ACTIVE | BLOCKED | STALE | COMPLETED | ARCHIVED
+  stage           String   @default("Development") // Planning | Development | Testing | Deployment | Production | Maintenance
+  priority        String   @default("medium") // low | medium | high | critical
+  progress        Int      @default(0) // 0-100 percentage
+  healthScore     Int      @default(0) // 0-100 score
+  healthTier      String   @default("Attention") // Excellent | Healthy | Attention | Risk | Critical
+  healthColor     String   @default("amber") // emerald | amber | rose | slate
+  healthUrl       String?
+  hasConfigYaml   Boolean  @default(false)
+  description     String?
+  lastActivityAt  DateTime?
+  scannedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relationships
+  metric          ProjectMetric?
+  healthBreakdown HealthScoreBreakdown?
+  milestones      Milestone[]
+  attentionItems  AttentionQueueItem[]
+  submodules      Submodule[]
+  aiAdvices       AIAdvice[]
+
+  @@index([status])
+  @@index([stage])
+  @@index([healthTier])
+}
+
+model ProjectMetric {
+  id                  String   @id @default(cuid())
+  projectId           String   @unique
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  todoCount           Int      @default(0)
+  fixmeCount          Int      @default(0)
+  totalFiles          Int      @default(0)
+  hasReadme           Boolean  @default(false)
+  hasDocker           Boolean  @default(false)
+  hasKubernetes       Boolean  @default(false)
+  hasTests            Boolean  @default(false)
+  gitBranch           String?
+  gitIsDirty          Boolean  @default(false)
+  gitUncommittedFiles Int      @default(0)
+  gitLastCommitDate   DateTime?
+  gitLastCommitMsg    String?
+  gitLastCommitAuthor String?
+  gitRemoteUrl        String?
+  readmePreview       String?
+  todoSamples         String   @default("[]") // JSON string of TodoItem[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Milestone {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  status      String   @default("todo") // todo | doing | done | blocked
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model HealthScoreBreakdown {
+  id            String   @id @default(cuid())
+  projectId     String   @unique
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  gitActivity   Int      @default(0)
+  documentation Int      @default(0)
+  buildStatus   Int      @default(0)
+  tests         Int      @default(0)
+  deployment    Int      @default(0)
+  openTasks     Int      @default(0)
+  freshness     Int      @default(0)
+  total         Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+model AttentionQueueItem {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  itemKey    String   // Key identifier e.g. "uncommitted-files"
+  severity   String   // urgent | warning | info
+  title      String
+  reason     String
+  isResolved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([isResolved])
+}
+
+model Submodule {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  relativePath String
+  type         String
+  frameworks   String   @default("[]") // JSON string array
+  createdAt    DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model AIAdvice {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  overallStatus   String
+  findings        String   @default("[]") // JSON string array
+  recommendations String   @default("[]") // JSON string array
+  riskLevel       String   @default("LOW") // LOW | MEDIUM | HIGH | CRITICAL
+  reasoning       String
+  provider        String   @default("local")
+  generatedAt     DateTime @default(now())
+
+  @@index([projectId])
+}
