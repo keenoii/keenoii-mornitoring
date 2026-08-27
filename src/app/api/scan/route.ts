@@ -29,7 +29,36 @@ export async function GET(request: Request) {
   // 1. If not forcing a refresh, check SQLite database first for instant 0ms load!
   if (!forceRefresh) {
     try {
-      const dbProjects = await getProjectsFromDb(customRoot || undefined);
+      const allDbProjects = await getProjectsFromDb();
+      let dbProjects: typeof allDbProjects = [];
+
+      if (customRoot) {
+        const norm = customRoot.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        dbProjects = allDbProjects.filter((p) =>
+          p.path.replace(/\\/g, '/').toLowerCase().startsWith(norm)
+        );
+      } else if (customRoots) {
+        const normRoots = rootsToScan.map((r) =>
+          r.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+        );
+        dbProjects = allDbProjects.filter((p) => {
+          const pNorm = p.path.replace(/\\/g, '/').toLowerCase();
+          return normRoots.some((r) => pNorm.startsWith(r));
+        });
+      } else {
+        dbProjects = allDbProjects;
+      }
+
+      // Deduplicate by path
+      const uniqueMap = new Map<string, (typeof allDbProjects)[0]>();
+      for (const p of dbProjects) {
+        const key = p.path.replace(/\\/g, '/').toLowerCase();
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, p);
+        }
+      }
+      dbProjects = Array.from(uniqueMap.values());
+
       if (dbProjects.length > 0) {
         let activeCount = 0;
         let needAttentionCount = 0;
@@ -38,12 +67,18 @@ export async function GET(request: Request) {
         let completedCount = 0;
 
         for (const p of dbProjects) {
-          const isCompleted = p.status === 'COMPLETED' || p.stage === 'Production' || Boolean(p.healthUrl || p.config?.health_url) || p.progress === 100;
+          const isCompleted =
+            p.status === 'COMPLETED' ||
+            p.stage === 'Production' ||
+            Boolean(p.healthUrl || p.config?.health_url) ||
+            p.progress === 100;
           const isStale = p.status === 'STALE' || p.health.isSmartStale;
-          if (p.status === 'ACTIVE' && !isStale && !isCompleted) activeCount++;
-          if (isStale && !isCompleted) staleCount++;
-          if (p.status === 'BLOCKED') blockedCount++;
+
           if (isCompleted) completedCount++;
+          else if (p.status === 'BLOCKED') blockedCount++;
+          else if (isStale) staleCount++;
+          else if (p.status === 'ACTIVE') activeCount++;
+
           if (p.attentionItems && p.attentionItems.length > 0) needAttentionCount++;
         }
 

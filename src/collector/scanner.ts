@@ -272,17 +272,12 @@ async function discoverProjectsInDirectory(
 
   // 1. Check if current directory itself is a recognized project
   const selfProject = await scanProjectDirectory(dirPath, rootDir);
-
-  // If this is NOT the selected root and is a recognized project:
-  // keep its internal submodules contained within its card!
-  if (selfProject && !isSelectedRoot) {
-    return [selfProject];
-  }
-
-  // 2. If this IS the selected root or a grouping folder:
-  // discover all child projects/services inside it!
   const results: ProjectScanResult[] = [];
-  if (selfProject && isSelectedRoot) {
+
+  // If this directory is a project that does not contain further child projects, add it
+  if (selfProject && (!selfProject.submodules || selfProject.submodules.length === 0)) {
+    results.push(selfProject);
+  } else if (selfProject && isSelectedRoot) {
     results.push(selfProject);
   }
 
@@ -305,9 +300,15 @@ async function discoverProjectsInDirectory(
     );
 
     for (const nested of nestedBatch.flat()) {
-      if (!results.some((r) => r.path === nested.path)) {
+      const nestedNorm = nested.path.replace(/\\/g, '/').toLowerCase();
+      if (!results.some((r) => r.path.replace(/\\/g, '/').toLowerCase() === nestedNorm)) {
         results.push(nested);
       }
+    }
+
+    // If no nested projects found inside this directory, keep the parent project
+    if (results.length === 0 && selfProject) {
+      results.push(selfProject);
     }
   }
 

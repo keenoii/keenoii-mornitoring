@@ -156,7 +156,26 @@ export function detectProjectType(projectPath: string): ProjectDetectorResult {
     if (primaryType === 'Unknown') primaryType = 'Kubernetes';
   }
 
-  // 8. Git fallback
+  // 8. Multi-Service / Fullstack Monorepo Pattern (e.g. backend + frontend, api + web, server + client)
+  const commonServiceDirs = ['backend', 'frontend', 'server', 'client', 'api', 'web', 'ui', 'admin', 'app', 'apps', 'packages', 'services'];
+  const matchedServices = commonServiceDirs.filter((name) => {
+    if (!filesInRoot.has(name)) return false;
+    try {
+      return fs.statSync(path.join(projectPath, name)).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+
+  if (matchedServices.length >= 2 || (matchedServices.length >= 1 && (filesInRoot.has('backend') || filesInRoot.has('frontend') || filesInRoot.has('api') || filesInRoot.has('server')))) {
+    if (primaryType === 'Unknown') {
+      primaryType = 'Monorepo';
+      indicatorFiles.push('multi-service');
+      frameworks.push('Multi-Service');
+    }
+  }
+
+  // 9. Git fallback
   if (filesInRoot.has('.git')) {
     indicatorFiles.push('.git');
     if (primaryType === 'Unknown') primaryType = 'Git Project';

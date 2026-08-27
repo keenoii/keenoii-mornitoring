@@ -5,7 +5,7 @@ import { ProjectWithHealth } from '@/lib/project-repository';
 import { VIRTUAL_STUDIOS, StudioDefinition, ClassificationResult } from '@/lib/studio-classifier';
 import { DEFAULT_OFFICE_LAYOUT, OfficeLayoutTheme, PanelCoordinate } from '@/lib/office-layout-config';
 import { APP_SETTINGS } from '@/config/app-settings';
-import { Server, Star } from 'lucide-react';
+import { Server, Star, Globe } from 'lucide-react';
 import { OfficeTopToolbar } from './OfficeTopToolbar';
 import { OfficeTourBanner } from './OfficeTourBanner';
 import { OfficeLayoutStudioToolbar } from './OfficeLayoutStudioToolbar';
@@ -404,9 +404,10 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
     if (isCritical) statusColor = APP_SETTINGS.statusColors.critical;
     else if (isAttention) statusColor = APP_SETTINGS.statusColors.attention;
 
+    const hasLiveUrl = Boolean(project?.healthUrl || project?.config?.health_url);
     const liveStatus = project ? liveStatuses[project.id] : undefined;
     const isLiveOffline = liveStatus ? !liveStatus.isOnline : false;
-    const isLiveOnline = liveStatus ? liveStatus.isOnline : false;
+    const isLiveOnline = hasLiveUrl && !isLiveOffline;
 
     const isIdle = !project;
     const idleInfo = isIdle ? getIdleDeskInfo(coord.roomType, coord.id) : null;
@@ -459,6 +460,16 @@ export const IsometricOfficeView: React.FC<IsometricOfficeViewProps> = ({
           searchQuery && !isMatchSearch ? 'opacity-20' : 'opacity-100'
         } ${isEditMode ? 'cursor-move hover:ring-2 hover:ring-amber-400' : ''}`}
       >
+        {/* Floating Holographic Online Globe on left side of sleeping worker's head (Compact orb) */}
+        {coord.roomType === 'dormant' && isLiveOnline && (
+          <div
+            className="absolute -top-6.5 left-1 z-30 pointer-events-none p-1 rounded-full bg-slate-950/95 border border-emerald-400/90 shadow-[0_0_12px_rgba(16,185,129,0.9)] backdrop-blur-md animate-bounce"
+            style={{ animationDuration: '3.5s' }}
+            title="ระบบกำลังออนไลน์บนโฮสต์จริง (Live Online)"
+          >
+            <Globe className="w-3.5 h-3.5 text-emerald-400 animate-spin" style={{ animationDuration: '10s' }} />
+          </div>
+        )}
         <div
           className={`h-full p-1.5 rounded-xl bg-slate-950/90 backdrop-blur-md border ${borderClass} group-hover/panel:border-white group-hover/panel:shadow-[0_0_18px_rgba(255,255,255,0.4)] transition-all flex flex-col items-center justify-between text-center relative overflow-hidden`}
         >

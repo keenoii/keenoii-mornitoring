@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Star, Target, ExternalLink } from 'lucide-react';
+import { Star, Target, ExternalLink, EyeOff } from 'lucide-react';
 import { ProjectWithHealth } from '@/lib/project-repository';
 
 interface ProjectCardProps {
@@ -13,6 +13,7 @@ interface ProjectCardProps {
   onOpenAdvisor: (project: ProjectWithHealth) => void;
   onOpenServices?: (project: ProjectWithHealth) => void;
   onOpenEditUrl?: (project: ProjectWithHealth) => void;
+  onToggleHide?: (projectId: string, e: React.MouseEvent) => void;
   liveStatus?: { isOnline: boolean; statusCode?: number; responseTimeMs: number; error?: string };
 }
 
@@ -24,6 +25,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   onOpenAdvisor,
   onOpenServices,
   onOpenEditUrl,
+  onToggleHide,
   liveStatus,
 }) => {
   const isStale = p.status === 'STALE' || p.health.isSmartStale;
@@ -60,8 +62,18 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             <p className="text-xs text-slate-400 truncate">{p.config?.description || p.path}</p>
           </div>
 
-          {/* Star & Clean Health Score Badge */}
+          {/* Actions & Health Score Badge */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {onToggleHide && (
+              <button
+                onClick={(e) => onToggleHide(p.id, e)}
+                className="p-1.5 rounded-xl border border-slate-800/80 text-slate-500 hover:text-rose-300 hover:bg-slate-800/80 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                title="ซ่อนโฟลเดอร์/โปรเจกต์นี้จากมุมมอง"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             <button
               onClick={(e) => onToggleStar(p.id, e)}
               className={`p-1.5 rounded-xl border transition-all cursor-pointer ${

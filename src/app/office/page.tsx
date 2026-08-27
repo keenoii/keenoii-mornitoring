@@ -68,6 +68,7 @@ export default function VirtualProjectOfficePage() {
   const [servicesProject, setServicesProject] = useState<ProjectWithHealth | null>(null);
   const [advisorProject, setAdvisorProject] = useState<ProjectWithHealth | null>(null);
   const [starredProjectIds, setStarredProjectIds] = useState<string[]>([]);
+  const [hiddenProjectIds, setHiddenProjectIds] = useState<string[]>([]);
   const [customStudioOverrides, setCustomStudioOverrides] = useState<Record<string, string>>({});
   const [overrideSavedSuccess, setOverrideSavedSuccess] = useState<boolean>(false);
 
@@ -78,7 +79,7 @@ export default function VirtualProjectOfficePage() {
   const [customApiKey, setCustomApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
 
-  // Load Starred, Roots & Custom Overrides from localStorage
+  // Load Starred, Roots, Hidden & Custom Overrides from localStorage
   useEffect(() => {
     let targetActiveId = 'srru';
     let targetRootsList = DEFAULT_ROOTS;
@@ -105,6 +106,9 @@ export default function VirtualProjectOfficePage() {
       const savedStars = localStorage.getItem('sentinel_starred_projects');
       if (savedStars) setStarredProjectIds(JSON.parse(savedStars));
 
+      const savedHidden = localStorage.getItem('sentinel_hidden_projects');
+      if (savedHidden) setHiddenProjectIds(JSON.parse(savedHidden));
+
       const savedOverrides = localStorage.getItem('sentinel_studio_overrides');
       if (savedOverrides) setCustomStudioOverrides(JSON.parse(savedOverrides));
 
@@ -117,6 +121,25 @@ export default function VirtualProjectOfficePage() {
 
     fetchOfficeProjects(false, targetActiveId, targetRootsList);
   }, []);
+
+  const toggleHideProject = (projectId: string) => {
+    setHiddenProjectIds((prev) => {
+      const next = prev.includes(projectId)
+        ? prev.filter((id) => id !== projectId)
+        : [...prev, projectId];
+      try {
+        localStorage.setItem('sentinel_hidden_projects', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const unhideAllProjects = () => {
+    setHiddenProjectIds([]);
+    try {
+      localStorage.removeItem('sentinel_hidden_projects');
+    } catch {}
+  };
 
   const currentRoot = useMemo(() => {
     if (activeRootId === 'ALL_REGISTERED') return null;
@@ -172,12 +195,6 @@ export default function VirtualProjectOfficePage() {
       localStorage.setItem('sentinel_office_mode', mode);
     } catch {}
   };
-
-  useEffect(() => {
-    if (monitoredRoots.length > 0) {
-      fetchOfficeProjects(false);
-    }
-  }, []);
 
   // Auto-refresh virtual office data & live status every 5 minutes (from APP_SETTINGS)
   useEffect(() => {
@@ -301,7 +318,11 @@ export default function VirtualProjectOfficePage() {
       lab: [],
     };
 
-    projects.forEach((p) => {
+    const visibleProjects = projects.filter(
+      (p) => !hiddenProjectIds.includes(p.id) && !hiddenProjectIds.includes(p.path)
+    );
+
+    visibleProjects.forEach((p) => {
       const override = customStudioOverrides[p.id] || customStudioOverrides[p.name];
       const classification = classifyProjectStudio(p, override);
 
@@ -667,7 +688,7 @@ export default function VirtualProjectOfficePage() {
         onUrlUpdated={handleUrlUpdated}
       />
 
-      {/* 10. MANAGE WORKSPACES MODAL */}
+      {/* 10. MANAGE WORKSPACES & HIDDEN PROJECTS MODAL */}
       <ManageWorkspacesModal
         isOpen={showManageModal}
         onClose={() => setShowManageModal(false)}
@@ -676,6 +697,10 @@ export default function VirtualProjectOfficePage() {
         setNewRootName={setNewRootName}
         newRootPath={newRootPath}
         setNewRootPath={setNewRootPath}
+        allProjects={projects}
+        hiddenProjectIds={hiddenProjectIds}
+        onToggleHideProject={toggleHideProject}
+        onUnhideAll={unhideAllProjects}
         onAddRoot={() => {
           if (!newRootName.trim() || !newRootPath.trim()) return;
           const newRoot: MonitoredRoot = {

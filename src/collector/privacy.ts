@@ -36,6 +36,16 @@ export const FORBIDDEN_DIRECTORIES = [
   '.github',
   '.vscode',
   '.idea',
+  'src',
+  'app',
+  'public',
+  'assets',
+  'styles',
+  'components',
+  'utils',
+  'hooks',
+  'migrations',
+  'seeds',
 ];
 
 export const SENSITIVE_FILE_PATTERNS = [

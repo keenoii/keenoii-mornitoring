@@ -68,8 +68,9 @@ export default function CommandCenterPage() {
   const [newRootPath, setNewRootPath] = useState<string>('');
   const [newRootName, setNewRootName] = useState<string>('');
 
-  // Starred / Active Focus Projects
+  // Starred & Hidden Projects
   const [starredProjectIds, setStarredProjectIds] = useState<string[]>([]);
+  const [hiddenProjectIds, setHiddenProjectIds] = useState<string[]>([]);
 
   // Load user settings from localStorage on mount
   useEffect(() => {
@@ -100,6 +101,9 @@ export default function CommandCenterPage() {
 
       const savedStars = localStorage.getItem('sentinel_starred_projects');
       if (savedStars) setStarredProjectIds(JSON.parse(savedStars));
+
+      const savedHidden = localStorage.getItem('sentinel_hidden_projects');
+      if (savedHidden) setHiddenProjectIds(JSON.parse(savedHidden));
     } catch {}
 
     fetchScanData(false, targetActiveId, targetRootsList);
@@ -121,6 +125,26 @@ export default function CommandCenterPage() {
       } catch {}
       return next;
     });
+  };
+
+  const toggleHideProject = (projectId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setHiddenProjectIds((prev) => {
+      const next = prev.includes(projectId)
+        ? prev.filter((id) => id !== projectId)
+        : [...prev, projectId];
+      try {
+        localStorage.setItem('sentinel_hidden_projects', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const unhideAllProjects = () => {
+    setHiddenProjectIds([]);
+    try {
+      localStorage.removeItem('sentinel_hidden_projects');
+    } catch {}
   };
 
   // Fetch scan data
@@ -166,12 +190,6 @@ export default function CommandCenterPage() {
     fetchScanData(false, id);
   };
 
-  useEffect(() => {
-    if (monitoredRoots.length > 0) {
-      fetchScanData(false);
-    }
-  }, []);
-
   // AI Advice Generator
   const handleGenerateAiAdvice = async () => {
     if (!selectedProjectForAdvisor) return;
@@ -201,6 +219,11 @@ export default function CommandCenterPage() {
   const filteredProjects = useMemo(() => {
     if (!data) return [];
     let list = [...data.projects];
+
+    // 1. Exclude hidden projects & subfolders
+    list = list.filter(
+      (p) => !hiddenProjectIds.includes(p.id) && !hiddenProjectIds.includes(p.path)
+    );
 
     if (activeQuickFilter === 'starred') {
       list = list.filter((p) => starredProjectIds.includes(p.id));
@@ -350,6 +373,47 @@ export default function CommandCenterPage() {
     }
   };
 
+  // Dynamic KPI Stats derived directly from data.projects (Single Source of Truth)
+  const kpiStats = useMemo(() => {
+    if (!data || !data.projects) {
+      return { total: 0, active: 0, attention: 0, stale: 0, blocked: 0, completed: 0 };
+    }
+
+    const projects = data.projects.filter(
+      (p) => !hiddenProjectIds.includes(p.id) && !hiddenProjectIds.includes(p.path)
+    );
+    let active = 0;
+    let attention = 0;
+    let stale = 0;
+    let blocked = 0;
+    let completed = 0;
+
+    for (const p of projects) {
+      const isCompleted =
+        p.status === 'COMPLETED' ||
+        p.stage === 'Production' ||
+        Boolean(p.healthUrl || p.config?.health_url) ||
+        p.progress === 100;
+      const isStale = p.status === 'STALE' || p.health.isSmartStale;
+
+      if (isCompleted) completed++;
+      else if (p.status === 'BLOCKED') blocked++;
+      else if (isStale) stale++;
+      else if (p.status === 'ACTIVE') active++;
+
+      if (p.attentionItems && p.attentionItems.length > 0) attention++;
+    }
+
+    return {
+      total: projects.length,
+      active,
+      attention,
+      stale,
+      blocked,
+      completed,
+    };
+  }, [data, hiddenProjectIds]);
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
       {/* 1. GLOBAL HEADER */}
@@ -385,12 +449,12 @@ export default function CommandCenterPage() {
 
       {/* 4. KPI SUMMARY STATS BAR */}
       <PortfolioKpiBar
-        totalProjects={data?.totalProjects ?? 0}
-        activeCount={data?.activeCount ?? 0}
-        needAttentionCount={data?.needAttentionCount ?? 0}
-        staleCount={data?.staleCount ?? 0}
-        blockedCount={data?.blockedCount ?? 0}
-        completedCount={data?.completedCount ?? 0}
+        totalProjects={kpiStats.total}
+        activeCount={kpiStats.active}
+        needAttentionCount={kpiStats.attention}
+        staleCount={kpiStats.stale}
+        blockedCount={kpiStats.blocked}
+        completedCount={kpiStats.completed}
         selectedStatus={selectedStatus}
         onSelectStatus={(st) => {
           setSelectedStatus(st);
@@ -429,13 +493,16 @@ export default function CommandCenterPage() {
               }}
               onOpenServices={(proj) => setSelectedProjectForServices(proj)}
               onOpenEditUrl={(proj) => setSelectedProjectForUrl(proj)}
+              onToggleHide={toggleHideProject}
               liveStatus={liveStatuses[p.id]}
             />
           ))}
         </div>
       ) : (
         <AttentionQueueTable
-          projects={data?.projects || []}
+          projects={(data?.projects || []).filter(
+            (p) => !hiddenProjectIds.includes(p.id) && !hiddenProjectIds.includes(p.path)
+          )}
           onOpenProject={(proj) => setSelectedProjectForExplainer(proj)}
         />
       )}
@@ -489,7 +556,7 @@ export default function CommandCenterPage() {
         onToggleApiKeyInput={() => setShowApiKeyInput(!showApiKeyInput)}
       />
 
-      {/* 9. MANAGE WORKSPACES MODAL */}
+      {/* 9. MANAGE WORKSPACES & HIDDEN PROJECTS MODAL */}
       <ManageWorkspacesModal
         isOpen={showManageModal}
         onClose={() => setShowManageModal(false)}
@@ -498,6 +565,10 @@ export default function CommandCenterPage() {
         setNewRootName={setNewRootName}
         newRootPath={newRootPath}
         setNewRootPath={setNewRootPath}
+        allProjects={data?.projects || []}
+        hiddenProjectIds={hiddenProjectIds}
+        onToggleHideProject={toggleHideProject}
+        onUnhideAll={unhideAllProjects}
         onAddRoot={() => {
           if (!newRootName.trim() || !newRootPath.trim()) return;
           const newRoot: MonitoredRoot = {

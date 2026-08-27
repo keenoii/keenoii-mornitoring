@@ -10,6 +10,17 @@ export interface ProjectWithHealth extends ProjectScanResult {
  * Upsert a batch of scanned projects into the SQLite database in a single fast transaction.
  */
 export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promise<void> {
+  db.exec('PRAGMA foreign_keys = OFF;');
+
+  // Load existing project rows from DB so we NEVER overwrite custom settings or manual URLs!
+  const existingProjectMap = new Map<string, any>();
+  try {
+    const existingRows = db.prepare(`SELECT * FROM projects`).all() as any[];
+    for (const r of existingRows) {
+      existingProjectMap.set(r.path.replace(/\\/g, '/').toLowerCase(), r);
+    }
+  } catch {}
+
   const insertProjectStmt = db.prepare(`
     INSERT INTO projects (
       id, name, slug, path, relativePath, primaryType, frameworks,
@@ -36,7 +47,7 @@ export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promis
       healthColor = excluded.healthColor,
       healthUrl = coalesce(excluded.healthUrl, projects.healthUrl),
       hasConfigYaml = excluded.hasConfigYaml,
-      description = excluded.description,
+      description = coalesce(excluded.description, projects.description),
       lastActivityAt = excluded.lastActivityAt,
       scannedAt = excluded.scannedAt,
       updatedAt = datetime('now')
@@ -111,6 +122,16 @@ export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promis
   `);
 
   for (const p of projects) {
+    const normPath = p.path.replace(/\\/g, '/').toLowerCase();
+    const existing = existingProjectMap.get(normPath);
+
+    const effectiveUrl = p.healthUrl || existing?.healthUrl || null;
+    const effectiveStage = p.hasConfigYaml ? p.stage : (effectiveUrl ? 'Production' : (existing?.stage || p.stage));
+    const effectiveStatus = p.hasConfigYaml ? p.status : (effectiveUrl ? 'COMPLETED' : (existing?.status || p.status));
+    const effectivePriority = p.hasConfigYaml ? p.priority : (existing?.priority || p.priority);
+    const effectiveProgress = p.hasConfigYaml ? p.progress : (effectiveUrl ? 100 : (existing?.progress ?? p.progress));
+    const effectiveDescription = p.hasConfigYaml ? p.config?.description : (existing?.description || p.config?.description || null);
+
     // 1. Project Core
     insertProjectStmt.run(
       p.id,
@@ -120,16 +141,16 @@ export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promis
       p.relativePath,
       p.detectedType.primaryType,
       JSON.stringify(p.detectedType.frameworks || []),
-      p.status,
-      p.stage,
-      p.priority,
-      p.progress,
+      effectiveStatus,
+      effectiveStage,
+      effectivePriority,
+      effectiveProgress,
       p.health.total,
       p.health.tier,
       p.health.color,
-      p.healthUrl || null,
+      effectiveUrl,
       p.hasConfigYaml ? 1 : 0,
-      p.config?.description || null,
+      effectiveDescription,
       p.metrics.lastModifiedDate || null,
       p.scannedAt
     );
@@ -212,6 +233,25 @@ export async function saveScanResultsToDb(projects: ProjectWithHealth[]): Promis
         );
       });
     }
+  }
+
+  // 7. Cleanup ONLY folders that no longer exist physically on disk
+  try {
+    const existingRows = db.prepare(`SELECT id, path FROM projects`).all() as { id: string; path: string }[];
+    for (const row of existingRows) {
+      const fs = require('fs');
+      if (!fs.existsSync(row.path)) {
+        db.prepare(`DELETE FROM projects WHERE id = ?`).run(row.id);
+        db.prepare(`DELETE FROM project_metrics WHERE projectId = ?`).run(row.id);
+        db.prepare(`DELETE FROM health_breakdowns WHERE projectId = ?`).run(row.id);
+        db.prepare(`DELETE FROM milestones WHERE projectId = ?`).run(row.id);
+        db.prepare(`DELETE FROM attention_items WHERE projectId = ?`).run(row.id);
+        db.prepare(`DELETE FROM submodules WHERE projectId = ?`).run(row.id);
+      }
+    }
+  } catch {}
+  finally {
+    db.exec('PRAGMA foreign_keys = ON;');
   }
 }
 
